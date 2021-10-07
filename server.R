@@ -7,7 +7,7 @@ library(png)
 library(doParallel)
 
 
-al=24 ; ale =runif(1)*10^3
+al=24 ;  ale =runif(1)*10^3
 
  ARD1<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){
   Xts<-NULL 
