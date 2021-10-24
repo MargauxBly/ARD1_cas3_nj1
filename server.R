@@ -5,9 +5,10 @@ library(SuppDists)
 library(gridExtra)
 library(png) 
 library(doParallel)
-
+library(dplyr)
 
 al=24 ;  ale =runif(1)*10^3
+# mu=2;sigma2=2 ;rho=0.5  ;p=1 ; perio=T
 
  ARD1<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){
   Xts<-NULL 
@@ -45,13 +46,30 @@ al=24 ;  ale =runif(1)*10^3
   list(dfXt=df_Xt,t=t,taus=taus,Xt=Xt)
 }
 
- ARD1_bis<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){
+ ARD1_bis<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){ 
    nb_maint=floor((n-1)/(tau_periode+1)) 
    df=ARD1(al,ale,mu,sigma2,rho,n+1,p,tau_periode,perio)
    list(dfXt=df$dfXt[1:n,],taus=df$taus,Xt=df$Xt[1:(n-nb_maint)])
  }
  
  
+ df_nj<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,choix){ # tp0 multiple de p #ici tau_periode>=2
+   
+   tp0=11*p
+   ard<-ARD1_bis(al,ale,mu,sigma2,rho,n,p,tau_periode=tp0,perio) #on rajoute des donnees
+   #ard1<-ARD1_bis(al,ale,mu,sigma2,rho,n,p,tau_periode-1,perio) #les donnees initiales
+   nb_maint=floor((n-1)/(tau_periode)) 
+   dfb<-ard$dfXt ; taus<-ard$taus[-c(1,length(ard$taus))] ; dfb1<-ard1$dfXt ; taus1<-ard1$taus[-c(1,length(ard1$taus))]
+   ind_saut<-seq(tau_periode,((tau_periode)*(nb_maint+1)-1),tau_periode)
+   ind_maint<-sort(c(ind_saut,ind_saut+1))
+   
+     dplus<-dfb$Degradation[] # indices des taus
+     dfb1$Degradation[taus1+1]
+   
+   
+   
+   
+ }
  
 
 #ale ne change qu'en cliquant sur le bouton resimuler, il faut que alea soit le meme pour les courbes et les estimations
@@ -62,7 +80,7 @@ dfs<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     d=list();ard1=list()
     #nb_maint=floor((n-1)/(tau_periode+1))
     plott<-ARD1_bis(al,ale,mu,sigma2,rho,n,p,tau_periode,perio)
-    alea=sort(sample((floor(ale)+1):(ale+nb_simu)))
+    alea=sort(sample((floor(ale)+1):(ale+nb_simu),size=nb_simu,replace = F))
     d[[1]]<-plott$dfXt
     ard1[[1]]<-plott
     if(nb_simu>1){
@@ -215,6 +233,8 @@ ARD1_C2<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){
     list(df=df,df0=df0,dinit=dinit,dinit0=dinit0,df1=df1,taus1=taus1,taus0=taus0,Xt2=Xt_C2)
 }
 
+
+
 dfs_C2<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     d=list();g=list();h=list();ardc2=list()
     #alea=ale
@@ -223,7 +243,7 @@ dfs_C2<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     g[[1]]<-plott$dinit0 # donnees completes
     h[[1]]<-plott$df # sans maintenance , sans non obs
     ardc2[[1]]<-plott
-    alea=sort(sample((floor(ale)+1):(ale+nb_simu)))
+    alea=sort(sample((floor(ale)+1):(ale+nb_simu),size=nb_simu,replace = F))
     if(nb_simu>1){
         for(i in 2:nb_simu){
             #alea<-c(alea,runif(1)*10^3)
@@ -235,6 +255,9 @@ dfs_C2<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     }
     list(d=d,g=g,h=h,alea=alea,plott=plott,ardc2=ardc2)
 }
+
+
+
 
 plotARD1_C2<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,num_simu){
     plott<-dfs_C2(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu)
@@ -477,45 +500,63 @@ EQM_C2_sig<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,num_simu
 #### cas 3 #### 
 
 ARD1_C3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio){
-  nb_maint=floor((n-1)/tau_periode)
-    ard1<-ARD1_bis(al,ale,mu,sigma2,rho,n+nb_maint,p,tau_periode,perio)
-    Xt<-ard1$Xt[1:n]
-    dinit0<-ard1$dfXt
-    dinit<-ard1$dfXt
-    taus0<-ard1$taus
-    # if(length(taus0)==(nb_maint+2)){
-    #   taus1<-taus0[-c(1,length(taus0))]
-    # }else{
-    #   taus1<-taus0[-1]
-    # }
-    taus1<-taus0[-c(1,length(taus0))]
-    df<-dinit[-(pmatch(taus1,dinit$Temps)),]
-    Degradation1<-dinit$Degradation
-    dinit$Degradation[(pmatch(taus1,dinit$Temps))]<-NA
-    df0<-data.frame(Temps=dinit$Temps,Degradation=dinit$Degradation)
-    df1<-cbind(df0,Degradation1)
-    list(df1=df1,df=df,taus1=taus1,dinit0=dinit0,df0=df0,ard1=ard1,Xt=Xt)
+  # nb_maint=floor((n-1)/tau_periode)
+  #   ard1<-ARD1_bis(al,ale,mu,sigma2,rho,n+nb_maint,p,tau_periode,perio)
+  #   Xt<-ard1$Xt[1:n]
+  #   dinit0<-ard1$dfXt
+  #   dinit<-ard1$dfXt
+  #   taus0<-ard1$taus
+  # 
+  #   taus1<-taus0[-c(1,length(taus0))]
+  #   df<-dinit[-(pmatch(taus1,dinit$Temps)),]
+  #   Degradation1<-dinit$Degradation
+  #   dinit$Degradation[(pmatch(taus1,dinit$Temps))]<-NA
+  #   df0<-data.frame(Temps=dinit$Temps,Degradation=dinit$Degradation)
+  #   df1<-cbind(df0,Degradation1)
+  #   list(df1=df1,df=df,taus1=taus1,dinit0=dinit0,df0=df0,ard1=ard1,Xt=Xt)
+    nb_maint=floor((n-1)/tau_periode)
+    tp0=11*p ;tau_periode=tp0
+    ard<-ARD1_bis(al,ale,mu,sigma2,rho,n=tp0*(nb_maint+1),p,tau_periode=tp0,perio) #on rajoute des donnees
+    Xt<-ard$Xt[1:(tp0*(nb_maint+1)-nb_maint)]
+    dfb<-ard$dfXt ; taus<-ard$taus[-c(1,length(ard$taus))] 
+    ind_saut<-seq(tau_periode+1,((tau_periode+1)*nb_maint),tau_periode+1)
+    ind_maint<-sort(c(ind_saut,ind_saut+1))
+    
+    df_fin<-dfb[c(1,ind_saut-1,ind_saut+1,length(dfb$Temps)),] #pour tau_periode=2 et k connu
+    df_final<-arrange(df_fin,Temps)
+    list(df_final=df_final,Xt=Xt)
 }
 
 dfs_C3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     d=list();g=list();h=list();ardc3=list()  ; xt=list()
     plott<-ARD1_C3(al,ale,mu,sigma2,rho,n,p,tau_periode,perio)
-    xt[[1]]<-plott$Xt
-    d[[1]]<-plott$df0 # non obs en NA
-    g[[1]]<-plott$dinit0 # donnees completes
-    h[[1]]<-plott$df # sans les donnees non obs
-    ardc3[[1]]<-plott
-    alea=sort(sample((floor(ale)+1):(ale+nb_simu)))
+     xt[[1]]<-plott$Xt
+    # d[[1]]<-plott$df0 # non obs en NA
+    # g[[1]]<-plott$dinit0 # donnees completes
+    # h[[1]]<-plott$df # sans les donnees non obs
+    # ardc3[[1]]<-plott
+    # alea=sort(sample((floor(ale)+1):(ale+nb_simu),size=nb_simu,replace = F))
+    # if(nb_simu>1){
+    #     for(i in 2:nb_simu){
+    #         ardc3[[i]]<-ARD1_C3(al,alea[i],mu,sigma2,rho,n,p,tau_periode,perio)
+    #         d[[i]]<-ardc3[[i]]$df0
+    #         g[[i]]<-ardc3[[i]]$dinit0
+    #         h[[i]]<-ardc3[[i]]$df
+    #         xt[[i]]<-ardc3[[i]]$Xt
+    #     }
+    # }
+    # list(d=d,g=g,h=h,alea=alea,plott=plott,alea=alea,ardc3=ardc3,xt=xt)
+    # 
+    h[[1]]<-plott$df_final 
+    alea=sort(sample((floor(ale)+1):(ale+nb_simu),size=nb_simu,replace = F))
     if(nb_simu>1){
-        for(i in 2:nb_simu){
-            ardc3[[i]]<-ARD1_C3(al,alea[i],mu,sigma2,rho,n,p,tau_periode,perio)
-            d[[i]]<-ardc3[[i]]$df0
-            g[[i]]<-ardc3[[i]]$dinit0
-            h[[i]]<-ardc3[[i]]$df
-            xt[[i]]<-ardc3[[i]]$Xt
-        }
+      for (i in 2:nb_simu){
+        ardc3[[i]]<-ARD1_C3(al,alea[i],mu,sigma2,rho,n,p,tau_periode,perio)
+        h[[i]]<-ardc3[[i]]$df_final
+        xt[[i]]<-ardc3[[i]]$Xt
+      }
     }
-    list(d=d,g=g,h=h,alea=alea,plott=plott,alea=alea,ardc3=ardc3,xt=xt)
+    list(h=h,alea=alea,xt=xt)
 }
 
 plotARD1_C3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,num_simu){
@@ -545,14 +586,14 @@ plotARD1_C3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,num_sim
 
 
 
-ARD1_paraC3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,rhoo){
+ARD1_paraC3<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu,rhoo){ #changer df$df_final pour revenir a la normale
     mus<-NULL ; sigs<-NULL ; logvrais=NULL
     nb_maint=floor((n-1)/tau_periode)
     df0<-dfs_C3(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu)
     for (i in 1:nb_simu){
         dfxt<-df0$xt[[i]]
         df<-df0$h[[i]] #sans les donnees non obs
-        dfg<-df0$g[[i]] #donnees completes
+        #dfg<-df0$g[[i]] #donnees completes
         DT<-diff(df$Temps)
         DD<-diff(df$Degradation)
         deltay<-data.frame(DTemps=DT,DDegradation=DD)
@@ -781,7 +822,7 @@ dfs_C4<-function(al,ale,mu,sigma2,rho,n,p,tau_periode,perio,nb_simu){
     g[[1]]<-plott$dinit0 # donnees completes
     h[[1]]<-plott$df # sans les donnees non obs
     ardc4[[1]]<-plott
-    alea=sort(sample((floor(ale)+1):(ale+nb_simu)))
+    alea=sort(sample((floor(ale)+1):(ale+nb_simu),size=nb_simu,replace = F))
     if(nb_simu>1){
         for(j in 2:nb_simu){
             ardc4[[j]]<-ARD1_C4(al,alea[j],mu,sigma2,rho,n,p,tau_periode,perio)
